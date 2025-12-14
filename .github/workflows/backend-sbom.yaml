@@ -1,0 +1,45 @@
+name: Backend SBOM-And-Scan
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  sbom-and-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Generate SBOM (CycloneDX)
+        run: ./gradlew cyclonedxBom
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: build/reports/bom.json
+
+      - name: Install Grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+            | sh -s -- -b /usr/local/bin
+
+      - name: Grype scan (from SBOM)
+        run: |
+          grype sbom:build/reports/bom.json \
+            --fail-on high \
+            --output table

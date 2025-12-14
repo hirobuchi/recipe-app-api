@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.0'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.cyclonedx.bom' version '1.8.2'
 }
 
 group = 'recipe.app'
@@ -33,4 +34,14 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+cyclonedxBom {
+    includeConfigs = ["runtimeClasspath"]
+    skipConfigs = ["testRuntimeClasspath"]
+    projectType = "application"
+    schemaVersion = "1.5"
+    destination = file("build/reports")
+    outputName = "bom"
+    outputFormat = "json"
 }
