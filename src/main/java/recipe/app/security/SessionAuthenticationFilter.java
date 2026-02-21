@@ -29,6 +29,13 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                                     @NonNull FilterChain filterChain)
             throws ServletException, IOException {
 
+        SecurityContextHolder.clearContext();
+
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
             for (Cookie c : cookies) {
@@ -36,10 +43,14 @@ public class SessionAuthenticationFilter extends OncePerRequestFilter {
                 if ("SESSION".equals(c.getName())) {
                     loginSessionsRepository.findBySessionTokenAndRevokedFalse(c.getValue())
                             .ifPresent(session -> {
-                                UsernamePasswordAuthenticationToken auth =
-                                        new UsernamePasswordAuthenticationToken(
-                                                session.getUserId(), null, List.of());
-                                SecurityContextHolder.getContext().setAuthentication(auth);
+                                
+                                if (session.getExpiresAt().isAfter(java.time.LocalDateTime.now())) {
+
+                                    UsernamePasswordAuthenticationToken auth =
+                                            new UsernamePasswordAuthenticationToken(
+                                                    session.getUserId(), null, List.of());
+                                    SecurityContextHolder.getContext().setAuthentication(auth);
+                                }
                             });
                 }
             }
