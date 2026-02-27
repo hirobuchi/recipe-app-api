@@ -2,6 +2,7 @@ package recipe.app.controller;
 
 import java.time.Duration;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,9 @@ public class AuthController {
 
     private final AuthService authService;
 
+    @Value("${spring.security.cookie.secure:true}")
+    private boolean secure;
+
     @PostMapping("/login")
     public ResponseEntity<Void> login(@RequestBody LoginRequest req) {
 
@@ -29,7 +33,7 @@ public class AuthController {
 
         ResponseCookie cookie = ResponseCookie.from("SESSION", token)
                 .httpOnly(true)
-                .secure(true)
+                .secure(secure)
                 .path("/")
                 .maxAge(java.util.Objects.requireNonNull(Duration.ofDays(7)))
                 .sameSite("Lax")

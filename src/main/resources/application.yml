@@ -11,4 +11,7 @@ spring:
     properties:
       hibernate:
         format_sql: ${FORMAT_SQL}
-        dialect: org.hibernate.dialect.PostgreSQLDialect 
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  security:
+    cookie:
+      secure: ${AUTH_COOKIE_SECURE:true}
