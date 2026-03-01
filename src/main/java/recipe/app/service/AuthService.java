@@ -49,4 +49,12 @@ public class AuthService {
 
         return token;
     }
+
+    /**
+     * ログアウト処理。指定されたセッショントークンのセッションを物理削除する。
+     */
+    public void logout(String sessionToken) {
+        sessionRepository.findBySessionTokenAndRevokedFalse(sessionToken)
+                .ifPresent(sessionRepository::delete);
+    }
 }
