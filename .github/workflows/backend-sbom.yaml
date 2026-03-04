@@ -37,13 +37,12 @@ jobs:
       - name: Generate SBOM (CycloneDX)
         run: |
           ./gradlew cyclonedxBom
-          cp build/reports/bom.json sbom.json
 
       - name: Scan SBOM with Grype (Official Action)
         id: grype
         uses: anchore/scan-action@f6601287cdb1efc985d6b765bbf99cb4c0ac29d8
         with:
-          sbom: sbom.json
+          sbom: build/reports/bom.json
           fail-build: true
           severity-cutoff: high
           output-format: json
