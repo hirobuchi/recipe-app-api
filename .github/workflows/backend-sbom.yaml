@@ -1,45 +1,164 @@
-name: Backend SBOM-And-Scan
+name: Backend SBOM and Vulnerability Scan (Secure)
 
 on:
   push:
     branches: [ main, master ]
-  pull_request:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-sbom-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   sbom-and-scan:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - uses: actions/setup-java@v4
+      - name: Setup Java (Temurin 17 exact)
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a
 
       - name: Generate SBOM (CycloneDX)
-        run: ./gradlew cyclonedxBom
+        run: |
+          ./gradlew cyclonedxBom
+          cp build/reports/bom.json sbom.json
 
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+      - name: Scan SBOM with Grype (Official Action)
+        id: grype
+        uses: anchore/scan-action@f6601287cdb1efc985d6b765bbf99cb4c0ac29d8
         with:
-          name: backend-sbom
-          path: build/reports/bom.json
+          sbom: sbom.json
+          fail-build: true
+          severity-cutoff: high
+          output-format: json
 
-      - name: Install Grype
+      - name: Save scan result
+        if: always()
         run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
-            | sh -s -- -b /usr/local/bin
+          echo "Output file path: ${{ steps.grype.outputs.json }}"
+          cp "${{ steps.grype.outputs.json }}" grype-result.json
 
-      - name: Grype scan (from SBOM)
-        run: |
-          grype sbom:build/reports/bom.json \
-            --fail-on high \
-            --output table
+      - name: Upload scan result
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: backend-grype-result
+          path: grype-result.json
+
+  create-or-update-issue:
+    needs: sbom-and-scan
+    if: always() && needs.sbom-and-scan.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Download scan result
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3
+        with:
+          name: backend-grype-result
+
+      - name: Create or Update Issue if High/Critical found
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const fs = require('fs');
+
+            const issueTitle = '🔴 High/Critical 脆弱性検出 (Backend)';
+            const timestamp = new Date().toISOString();
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const raw = fs.readFileSync('grype-result.json', 'utf8');
+            const data = JSON.parse(raw);
+
+            function sanitize(str) {
+              return String(str).replace(/\|/g, '\\|');
+            }
+
+            const findings = (data.matches || [])
+              .filter(m =>
+                m.vulnerability &&
+                ['High', 'Critical'].includes(m.vulnerability.severity)
+              )
+              .map(m => ({
+                severity: sanitize(m.vulnerability.severity),
+                id: sanitize(m.vulnerability.id),
+                pkg: sanitize(m.artifact?.name || 'unknown'),
+                version: sanitize(m.artifact?.version || 'unknown')
+              }));
+
+            const tableHeader = [
+              '| Severity | Vulnerability | Package | Version |',
+              '|----------|--------------|---------|---------|'
+            ].join('\n');
+
+            const tableRows = findings
+              .slice(0, 20)
+              .map(f =>
+                `| ${f.severity} | ${f.id} | ${f.pkg} | ${f.version} |`
+              )
+              .join('\n');
+
+            const body = `
+            ## 🚨 High/Critical 脆弱性検出 (Backend)
+
+            **検出数**: ${findings.length}
+            **検出日時**: ${timestamp}
+
+            ${tableHeader}
+            ${tableRows}
+
+            ※ 上位20件のみ表示  
+            🔎 詳細（Artifacts含む）:
+            ${runUrl}
+            `;
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'vulnerability'
+            });
+
+            const existing = issues.find(i => i.title === issueTitle);
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body
+              });
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: `🔁 再スキャン実行: ${timestamp}`
+              });
+
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body,
+                labels: ['security', 'vulnerability']
+              });
+            }
