@@ -30,7 +30,7 @@ public class AuthController {
     private boolean secure;
 
     @PostMapping("/login")
-    public ResponseEntity<Void> login(@RequestBody LoginRequest req) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest req) {
 
         String token = authService.login(req.getUsername(), req.getPassword());
 
