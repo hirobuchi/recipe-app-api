@@ -33,6 +33,11 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.thymeleaf:thymeleaf:3.1.4.RELEASE'
     implementation 'org.thymeleaf:thymeleaf-spring6:3.1.4.RELEASE'
+	implementation(enforcedPlatform("tools.jackson:jackson-bom:3.1.1"))
+	constraints {
+        implementation("tools.jackson.core:jackson-databind:3.1.1")
+        implementation("tools.jackson.core:jackson-core:3.1.1")
+    }
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -53,4 +58,10 @@ cyclonedxBom {
     destination = file("build/reports")
     outputName = "bom"
     outputFormat = "json"
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "tools.jackson:jackson-bom:3.1.1"
+    }
 }
