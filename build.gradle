@@ -27,11 +27,6 @@ dependencies {
 	implementation 'org.postgresql:postgresql'
 	implementation 'org.apache.commons:commons-lang3:3.18.0'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation(enforcedPlatform("tools.jackson:jackson-bom:3.1.1"))
-	constraints {
-        implementation("tools.jackson.core:jackson-databind:3.1.1")
-        implementation("tools.jackson.core:jackson-core:3.1.1")
-    }
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	annotationProcessor 'org.projectlombok:lombok'
